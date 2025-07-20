@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+.ENV/
+.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Excel files (sample data and results)
+*.xlsx
+*.xls
+*.csv
+
+# Database files (will be recreated)
+*.db
+*.sqlite
+*.sqlite3
+
+# Upload directory contents (except .gitkeep)
+webview/uploads/*
+!webview/uploads/.gitkeep
+
+# Log files
+*.log
+log.txt
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Test files
+test_*.py
+*_test.py
+
+# Legacy files (non-webview version)
+compare.py
+compare_portfolio.py
+bkp-compare.py
+baseline.xlsx
+Oput.xlsx
+Revised*.xlsx

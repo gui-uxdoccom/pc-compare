@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PC Compare Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        .progress {
+            height: 20px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #4CAF50;
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .log {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            margin-top: 20px;
+        }
+        .download-section {
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+        .download-btn {
+            background-color: #2196F3;
+            color: white;
+            padding: 10px 20px;
+        }
+        .download-btn:hover {
+            background-color: #0b7dda;
+        }
+        
+        /* Summary Dashboard Styles */
+        .summary-dashboard {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .summary-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .summary-card.warning {
+            border-left-color: #ff9800;
+        }
+        
+        .summary-card.error {
+            border-left-color: #f44336;
+        }
+        
+        .summary-card h4 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .metric-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196F3;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
+        .issues-list {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .issues-list h5 {
+            margin-top: 0;
+            color: #856404;
+        }
+        
+        .issues-list ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .issues-list li {
+            margin-bottom: 5px;
+        }
+        
+        .recommendations {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .recommendations h5 {
+            margin-top: 0;
+            color: #0c5460;
+        }
+        
+        .historical-comparison {
+            background: #e2e3e5;
+            border: 1px solid #d6d8db;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .trend-indicator {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .trend-improving {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .trend-declining {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .trend-stable {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <h1>PC Compare Tool</h1>
+    
+    <div class="container">
+        <div class="form-group">
+            <label for="baseline">Upload Baseline Excel File:</label>
+            <input type="file" id="baseline" accept=".xlsx">
+        </div>
+        
+        <button id="submitBtn" class="btn">Start Comparison</button>
+        
+        <div id="status" class="status">
+            <h3>Status: <span id="statusText">Uploading...</span></h3>
+            <div class="progress">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="log" id="log"></div>
+        </div>
+        
+        <div class="download-section" id="downloadSection">
+            <h3>Comparison Complete!</h3>
+            <a id="downloadLink" class="btn download-btn">Download Results</a>
+        </div>
+        
+        <!-- Summary Dashboard -->
+        <div class="summary-dashboard" id="summaryDashboard">
+            <div class="summary-card">
+                <h4>📊 Comparison Summary</h4>
+                <div class="metrics-grid" id="metricsGrid">
+                    <!-- Metrics will be populated by JavaScript -->
+                </div>
+            </div>
+            
+            <div class="summary-card warning" id="issuesCard" style="display: none;">
+                <h4>⚠️ Issues Found</h4>
+                <div id="issuesSummary">
+                    <!-- Issues will be populated by JavaScript -->
+                </div>
+            </div>
+            
+            <div class="summary-card" id="historicalCard" style="display: none;">
+                <h4>📈 Historical Comparison</h4>
+                <div id="historicalComparison">
+                    <!-- Historical data will be populated by JavaScript -->
+                </div>
+            </div>
+            
+            <div class="summary-card" id="recommendationsCard" style="display: none;">
+                <h4>💡 Recommendations</h4>
+                <div id="recommendationsList">
+                    <!-- Recommendations will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const baselineInput = document.getElementById('baseline');
+            const submitBtn = document.getElementById('submitBtn');
+            const statusDiv = document.getElementById('status');
+            const statusText = document.getElementById('statusText');
+            const progressBar = document.getElementById('progressBar');
+            const logDiv = document.getElementById('log');
+            const downloadSection = document.getElementById('downloadSection');
+            const downloadLink = document.getElementById('downloadLink');
+            
+            let resultId = null;
+            let checkStatusInterval = null;
+            
+            function addLogMessage(message) {
+                const now = new Date().toLocaleTimeString();
+                logDiv.innerHTML += `[${now}] ${message}<br>`;
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+            
+            submitBtn.addEventListener('click', function() {
+                if (!baselineInput.files.length) {
+                    alert('Please select a baseline Excel file first');
+                    return;
+                }
+                
+                const file = baselineInput.files[0];
+                if (!file.name.endsWith('.xlsx')) {
+                    alert('Please select a valid Excel (.xlsx) file');
+                    return;
+                }
+                
+                submitBtn.disabled = true;
+                statusDiv.style.display = 'block';
+                progressBar.style.width = '10%';
+                addLogMessage('Uploading baseline file...');
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    resultId = data.result_id;
+                    addLogMessage('Upload successful. Starting comparison process...');
+                    statusText.textContent = 'Processing...';
+                    progressBar.style.width = '30%';
+                    
+                    // Start polling for status
+                    checkStatusInterval = setInterval(checkStatus, 2000);
+                })
+                .catch(error => {
+                    addLogMessage(`Error: ${error.message}`);
+                    statusText.textContent = 'Error';
+                    submitBtn.disabled = false;
+                });
+            });
+            
+            function checkStatus() {
+                if (!resultId) return;
+                
+                fetch(`/status/${resultId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'complete') {
+                            clearInterval(checkStatusInterval);
+                            progressBar.style.width = '100%';
+                            statusText.textContent = 'Complete';
+                            addLogMessage('Comparison completed successfully!');
+                            
+                            // Show download button
+                            downloadSection.style.display = 'block';
+                            downloadLink.href = `/download/${resultId}`;
+                            
+                            // Fetch and display summary
+                            fetchSummary(resultId);
+                            
+                            submitBtn.disabled = false;
+                        } else if (data.status === 'processing') {
+                            // Increment progress bar by small amount
+                            const currentWidth = parseInt(progressBar.style.width) || 30;
+                            if (currentWidth < 90) {
+                                progressBar.style.width = `${currentWidth + 5}%`;
+                            }
+                            addLogMessage('Still processing...');
+                        } else {
+                            clearInterval(checkStatusInterval);
+                            statusText.textContent = 'Error';
+                            addLogMessage(`Error: ${data.message || 'Unknown error'}`);
+                            submitBtn.disabled = false;
+                        }
+                    })
+                    .catch(error => {
+                        addLogMessage(`Error checking status: ${error.message}`);
+                    });
+            }
+            
+            function fetchSummary(resultId) {
+                fetch(`/summary/${resultId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.summary) {
+                            displaySummary(data.summary);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching summary:', error);
+                    });
+            }
+            
+            function displaySummary(summary) {
+                const dashboard = document.getElementById('summaryDashboard');
+                const metricsGrid = document.getElementById('metricsGrid');
+                const issuesCard = document.getElementById('issuesCard');
+                const issuesSummary = document.getElementById('issuesSummary');
+                const historicalCard = document.getElementById('historicalCard');
+                const historicalComparison = document.getElementById('historicalComparison');
+                const recommendationsCard = document.getElementById('recommendationsCard');
+                const recommendationsList = document.getElementById('recommendationsList');
+                
+                // Show dashboard
+                dashboard.style.display = 'block';
+                
+                // Populate metrics
+                const currentAnalysis = summary.current_analysis;
+                const totals = currentAnalysis.totals;
+                const statusBreakdown = currentAnalysis.status_breakdown;
+                
+                metricsGrid.innerHTML = `
+                    <div class="metric-item">
+                        <div class="metric-value">${totals.baseline_companies}</div>
+                        <div class="metric-label">Baseline Companies</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">${totals.website_companies}</div>
+                        <div class="metric-label">Website Companies</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">${totals.accuracy_rate}%</div>
+                        <div class="metric-label">Match Accuracy</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" style="color: #4CAF50">${statusBreakdown.ok}</div>
+                        <div class="metric-label">Perfect Matches</div>
+                    </div>
+                `;
+                
+                // Show issues if any
+                const totalIssues = statusBreakdown.missing_from_website + 
+                                  statusBreakdown.extra_on_website + 
+                                  statusBreakdown.name_updates_needed + 
+                                  statusBreakdown.sector_updates_needed;
+                
+                if (totalIssues > 0) {
+                    issuesCard.style.display = 'block';
+                    let issuesHtml = '<ul>';
+                    
+                    if (statusBreakdown.missing_from_website > 0) {
+                        issuesHtml += `<li><strong>${statusBreakdown.missing_from_website}</strong> companies missing from website</li>`;
+                    }
+                    if (statusBreakdown.extra_on_website > 0) {
+                        issuesHtml += `<li><strong>${statusBreakdown.extra_on_website}</strong> extra companies on website</li>`;
+                    }
+                    if (statusBreakdown.name_updates_needed > 0) {
+                        issuesHtml += `<li><strong>${statusBreakdown.name_updates_needed}</strong> companies need name updates</li>`;
+                    }
+                    if (statusBreakdown.sector_updates_needed > 0) {
+                        issuesHtml += `<li><strong>${statusBreakdown.sector_updates_needed}</strong> companies need sector updates</li>`;
+                    }
+                    
+                    issuesHtml += '</ul>';
+                    issuesSummary.innerHTML = issuesHtml;
+                }
+                
+                // Show historical comparison if available
+                const historical = summary.historical_comparison;
+                if (historical.has_historical_data) {
+                    historicalCard.style.display = 'block';
+                    const trend = historical.overall_trend;
+                    const trendClass = `trend-${trend}`;
+                    
+                    historicalComparison.innerHTML = `
+                        <p>Compared to previous quarter: <span class="trend-indicator ${trendClass}">${trend.toUpperCase()}</span></p>
+                        <div class="historical-details">
+                            <p><strong>Changes since last run:</strong></p>
+                            <ul>
+                                <li>Perfect matches: ${historical.changes.ok.current} (${historical.changes.ok.change >= 0 ? '+' : ''}${historical.changes.ok.change})</li>
+                                <li>Missing companies: ${historical.changes.missing_from_website.current} (${historical.changes.missing_from_website.change >= 0 ? '+' : ''}${historical.changes.missing_from_website.change})</li>
+                                <li>Name updates needed: ${historical.changes.name_updates_needed.current} (${historical.changes.name_updates_needed.change >= 0 ? '+' : ''}${historical.changes.name_updates_needed.change})</li>
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+                // Show recommendations
+                const recommendations = summary.recommendations;
+                if (recommendations && recommendations.length > 0) {
+                    recommendationsCard.style.display = 'block';
+                    let recHtml = '<ul>';
+                    recommendations.forEach(rec => {
+                        recHtml += `<li>${rec}</li>`;
+                    });
+                    recHtml += '</ul>';
+                    recommendationsList.innerHTML = recHtml;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

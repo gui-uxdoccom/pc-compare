@@ -74,8 +74,6 @@ test_*.py
 *_test.py
 
 # Legacy files (non-webview version)
-compare.py
-compare_portfolio.py
 bkp-compare.py
 baseline.xlsx
 Oput.xlsx

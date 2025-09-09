@@ -68,9 +68,18 @@ async def process_file(filepath, output_path, result_id):
         
         # Scrape website data
         print("Starting website scraping...")
-        website_df = await scrape_website()
-        if website_df is None:
-            processing_results[result_id] = {'status': 'error', 'message': 'Failed to scrape website'}
+        try:
+            website_df = await scrape_website()
+            if website_df is None:
+                processing_results[result_id] = {'status': 'error', 'message': 'Failed to scrape website - scraper returned None. Check server logs for details.'}
+                print("ERROR: Website scraping returned None")
+                return
+        except Exception as e:
+            error_msg = f'Failed to scrape website: {str(e)}'
+            processing_results[result_id] = {'status': 'error', 'message': error_msg}
+            print(f"ERROR: {error_msg}")
+            import traceback
+            traceback.print_exc()
             return
         
         print(f"Scraped {len(website_df)} companies from website")

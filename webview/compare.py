@@ -14,72 +14,83 @@ async def scrape_website():
     companies = []
     print("Starting website scraping...")
     
-    async with async_playwright() as p:
-        browser = await p.chromium.launch()
-        page = await browser.new_page()
-        
-        try:
-            await page.goto(WEBSITE_URL)
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
             
-            # Handle cookie consent
             try:
-                await page.wait_for_selector(SELECTORS["cookie_accept"], timeout=5000)
-                await page.click(SELECTORS["cookie_accept"])
-                print("Accepted cookies.")
-                await page.wait_for_timeout(2000)  # Wait for cookie banner to disappear
-            except:
-                print("No cookie consent needed or already accepted.")
+                print(f"Navigating to {WEBSITE_URL}")
+                await page.goto(WEBSITE_URL, timeout=30000)
             
-            # Wait for company list to load
-            await page.wait_for_selector('ul.search-result-list')
+                # Handle cookie consent
+                try:
+                    await page.wait_for_selector(SELECTORS["cookie_accept"], timeout=5000)
+                    await page.click(SELECTORS["cookie_accept"])
+                    print("Accepted cookies.")
+                    await page.wait_for_timeout(2000)  # Wait for cookie banner to disappear
+                except:
+                    print("No cookie consent needed or already accepted.")
             
-            # Get total pages
-            page_numbers = []
-            page_links = await page.query_selector_all('ul.page-selector-list li a')
-            for link in page_links:
-                text = await link.inner_text()
-                if text.isdigit():
-                    page_numbers.append(int(text))
+                # Wait for company list to load
+                print("Waiting for company list to load...")
+                await page.wait_for_selector('ul.search-result-list', timeout=15000)
             
-            total_pages = max(page_numbers) if page_numbers else 1
-            print(f"Found {total_pages} pages to scrape.")
+                # Get total pages
+                page_numbers = []
+                page_links = await page.query_selector_all('ul.page-selector-list li a')
+                for link in page_links:
+                    text = await link.inner_text()
+                    if text.isdigit():
+                        page_numbers.append(int(text))
             
-            # Scrape each page
-            for page_num in range(1, total_pages + 1):
-                print(f"Scraping page {page_num}/{total_pages}")
-                
-                # Get companies from current page
-                company_cards = await page.query_selector_all('ul.search-result-list li a')
-                
-                for card in company_cards:
-                    sector_elem = await card.query_selector('h5')
-                    name_elem = await card.query_selector('h4')
-
-                    name = await name_elem.inner_text() if name_elem else ""
-                    sector = await sector_elem.inner_text() if sector_elem else ""
+                total_pages = max(page_numbers) if page_numbers else 1
+                print(f"Found {total_pages} pages to scrape.")
+            
+                # Scrape each page
+                for page_num in range(1, total_pages + 1):
+                    print(f"Scraping page {page_num}/{total_pages}")
                     
-                    if name:  # Only add if we found a name
-                        companies.append({
-                            "Company": name.strip(),
-                            "Sector": sector.strip()
-                        })
-                
-                # Click next page if not on last page
-                if page_num < total_pages:
-                    next_page = await page.query_selector(f'ul.page-selector-list li a[data-itemnumber="{page_num + 1}"]')
-                    if next_page:
-                        await next_page.click()
-                        await page.wait_for_timeout(1500)  # Wait for page content to load
-                        await page.wait_for_selector('ul.search-result-list')  # Wait for company list
+                    # Get companies from current page
+                    company_cards = await page.query_selector_all('ul.search-result-list li a')
+                    
+                    for card in company_cards:
+                        sector_elem = await card.query_selector('h5')
+                        name_elem = await card.query_selector('h4')
+
+                        name = await name_elem.inner_text() if name_elem else ""
+                        sector = await sector_elem.inner_text() if sector_elem else ""
+                        
+                        if name:  # Only add if we found a name
+                            companies.append({
+                                "Company": name.strip(),
+                                "Sector": sector.strip()
+                            })
+                    
+                    # Click next page if not on last page
+                    if page_num < total_pages:
+                        next_page = await page.query_selector(f'ul.page-selector-list li a[data-itemnumber="{page_num + 1}"]')
+                        if next_page:
+                            await next_page.click()
+                            await page.wait_for_timeout(1500)  # Wait for page content to load
+                            await page.wait_for_selector('ul.search-result-list')  # Wait for company list
             
-            print(f"Successfully scraped {len(companies)} companies.")
-        
-        except Exception as e:
-            print(f"Error during scraping: {e}")
-            return None
-        
-        finally:
-            await browser.close()
+                print(f"Successfully scraped {len(companies)} companies.")
+            
+            except Exception as e:
+                print(f"Error during scraping: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
+            
+            finally:
+                await browser.close()
+    
+    except Exception as e:
+        print(f"Failed to launch browser: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
     
     return pd.DataFrame(companies)
 

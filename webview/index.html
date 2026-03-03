@@ -219,8 +219,50 @@
             <label for="baseline">Upload Baseline Excel File:</label>
             <input type="file" id="baseline" accept=".xlsx">
         </div>
-        
-        <button id="submitBtn" class="btn">Start Comparison</button>
+
+        <div class="advanced-options" style="margin-top: 20px; padding: 15px; background: #fff; border-radius: 5px; border: 1px solid #ddd;">
+            <h3 style="margin-top: 0; font-size: 16px; color: #555;">⚙️ Scraping Options (Cloudflare Bypass)</h3>
+
+            <div class="form-group">
+                <label for="browserType">Browser:</label>
+                <select id="browserType" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="firefox" selected>🦊 Firefox (Recommended - Best Cloudflare bypass)</option>
+                    <option value="chromium">🌐 Chrome/Chromium (Faster but may be blocked)</option>
+                    <option value="webkit">🧭 WebKit/Safari (Alternative)</option>
+                </select>
+                <small style="color: #666;">Firefox usually bypasses Cloudflare better than Chrome</small>
+            </div>
+
+            <div class="form-group">
+                <label for="headlessMode">Mode:</label>
+                <select id="headlessMode" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="true" selected>🔒 Headless (Background - Faster)</option>
+                    <option value="false">👁️ Visible (For debugging/manual CAPTCHA)</option>
+                </select>
+                <small style="color: #666;">Use visible mode if you need to solve CAPTCHAs manually</small>
+            </div>
+
+            <div class="form-group">
+                <label for="timeout">Timeout:</label>
+                <select id="timeout" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="60000">60 seconds (Standard)</option>
+                    <option value="90000" selected>90 seconds (Recommended)</option>
+                    <option value="120000">120 seconds (Slow connection)</option>
+                    <option value="180000">180 seconds (Very slow/Cloudflare challenges)</option>
+                </select>
+                <small style="color: #666;">Increase if scraping times out due to slow loading or Cloudflare</small>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="debugMode" checked style="margin-right: 8px; width: auto;">
+                    <span>💾 Enable debug mode (saves screenshots & HTML on errors)</span>
+                </label>
+                <small style="color: #666; margin-left: 24px;">Recommended for troubleshooting scraping issues</small>
+            </div>
+        </div>
+
+        <button id="submitBtn" class="btn" style="margin-top: 20px; width: 100%;">🚀 Start Comparison</button>
         
         <div id="status" class="status">
             <h3>Status: <span id="statusText">Uploading...</span></h3>
@@ -303,10 +345,22 @@
                 statusDiv.style.display = 'block';
                 progressBar.style.width = '10%';
                 addLogMessage('Uploading baseline file...');
-                
+
+                // Get scraping options
+                const browserType = document.getElementById('browserType').value;
+                const headless = document.getElementById('headlessMode').value;
+                const debugMode = document.getElementById('debugMode').checked;
+                const timeout = document.getElementById('timeout').value;
+
+                addLogMessage(`Options: Browser=${browserType}, Mode=${headless === 'true' ? 'Headless' : 'Visible'}, Timeout=${timeout}ms`);
+
                 const formData = new FormData();
                 formData.append('file', file);
-                
+                formData.append('browser_type', browserType);
+                formData.append('headless', headless);
+                formData.append('debug', debugMode);
+                formData.append('timeout', timeout);
+
                 fetch('/upload', {
                     method: 'POST',
                     body: formData

@@ -1,5 +1,6 @@
-pandas
-openpyxl
-playwright
-rapidfuzz
-tqdm
+pandas>=3.0.1
+openpyxl>=3.1.5
+playwright>=1.58.0
+playwright-stealth>=1.0.6
+rapidfuzz>=3.14.3
+tqdm>=4.67.3

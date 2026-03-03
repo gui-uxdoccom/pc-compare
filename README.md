@@ -5,21 +5,24 @@ A sophisticated web application for comparing portfolio companies between your b
 ## 🚀 **Quick Start**
 
 ```bash
-# Clone the repository
-git clone https://github.com/gui-uxdoccom/pc-compare.git
+# Navigate to the webview directory
 cd pc-compare/webview
+
+# Create virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Install Playwright browsers
-playwright install
+playwright install chromium firefox
 
-# Start the application
-python app.py
+# Start the Flask application
+python3 app.py
 ```
 
-Visit `http://127.0.0.1:5000` to use the application.
+Visit `http://127.0.0.1:5000` to use the web interface.
 
 ## ✨ **Key Features**
 
@@ -45,15 +48,17 @@ Visit `http://127.0.0.1:5000` to use the application.
 
 ```
 webview/
-├── app.py                  # Flask web application
-├── enhanced_matching.py    # Advanced matching algorithms
-├── results_analyzer.py     # Analytics and historical tracking
-├── compare.py              # Legacy comparison logic
-├── config.py               # Configuration settings
-├── index.html              # Web interface
-├── requirements.txt        # Python dependencies
-├── uploads/                # File upload directory
-└── README_ENHANCED.md      # Detailed documentation
+├── app.py                      # Flask web application
+├── enhanced_matching.py        # Advanced matching algorithms
+├── results_analyzer.py         # Analytics and historical tracking
+├── compare.py                  # Core comparison logic with scraping
+├── config.py                   # Configuration settings
+├── index.html                  # Web interface
+├── requirements.txt            # Python dependencies
+├── test_scrape_visible.py      # Debug scraper (Chrome)
+├── test_scrape_firefox.py      # Debug scraper (Firefox)
+├── uploads/                    # File upload directory
+└── README.md                   # Complete documentation
 ```
 
 ## 🔧 **How It Works**
@@ -98,7 +103,12 @@ For a typical 200-company baseline:
 - Modern web browser
 - Internet connection for website scraping
 
-See [webview/README_ENHANCED.md](webview/README_ENHANCED.md) for detailed technical documentation.
+See [webview/README.md](webview/README.md) for detailed technical documentation, including:
+- Complete installation instructions
+- Usage guide for web interface and CLI
+- Troubleshooting Cloudflare issues
+- Understanding matching strategies
+- Configuration options
 
 ---
 

@@ -1,41 +1,181 @@
 import asyncio
+import os
 import pandas as pd
 from playwright.async_api import async_playwright
+from playwright_stealth import Stealth
 from rapidfuzz import fuzz
-import argparse
 import sys
 from datetime import datetime
 from config import *
 from tqdm import tqdm
 import re
 
-async def scrape_website():
-    """Scrape company data from website"""
+
+async def scrape_website(headless=True, browser_type='firefox', debug_mode=False, timeout=60000):
+    """Scrape company data from website with Cloudflare bypass via playwright-stealth.
+
+    Args:
+        headless: If False, runs browser in visible mode (useful for debugging/CAPTCHA)
+        browser_type: Browser to use ('chromium', 'firefox', 'webkit')
+        debug_mode: If True, saves screenshots and HTML on errors
+        timeout: Timeout in milliseconds for page load (default 60000ms = 60s)
+    """
     companies = []
-    print("Starting website scraping...")
-    
+    print("=" * 80)
+    print("STARTING WEBSITE SCRAPING")
+    print("=" * 80)
+    print(f"Browser: {browser_type}")
+    print(f"Headless mode: {headless}")
+    print(f"Debug mode: {debug_mode}")
+    print(f"Timeout: {timeout}ms")
+    print(f"Target: {WEBSITE_URL}")
+    print("=" * 80)
+
+    debug_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            
+            # Select browser based on type
+            if browser_type == 'firefox':
+                print("Launching Firefox with playwright-stealth...")
+                browser = await p.firefox.launch(headless=headless)
+            elif browser_type == 'webkit':
+                print("Launching WebKit with playwright-stealth...")
+                browser = await p.webkit.launch(headless=headless)
+            else:  # chromium (default)
+                print("Launching Chromium with playwright-stealth...")
+                browser = await p.chromium.launch(
+                    headless=headless,
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-dev-shm-usage',
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-web-security',
+                        '--disable-features=IsolateOrigins,site-per-process'
+                    ]
+                )
+
+            context = await browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                locale='en-US',
+                timezone_id='America/New_York',
+                color_scheme='light',
+                permissions=['geolocation'],
+                extra_http_headers={
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
+                    'Cache-Control': 'max-age=0',
+                    'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"macOS"'
+                }
+            )
+            page = await context.new_page()
+
+            # Apply playwright-stealth to remove all automation fingerprints
+            print("Applying playwright-stealth patches...")
+            await Stealth().apply_stealth_async(page)
+
             try:
                 print(f"Navigating to {WEBSITE_URL}")
-                await page.goto(WEBSITE_URL, timeout=30000)
-            
+
+                # Add random mouse movement to appear more human
+                await page.mouse.move(100, 100)
+                await page.wait_for_timeout(500)
+
+                # Try with domcontentloaded first (faster and more reliable)
+                try:
+                    await page.goto(WEBSITE_URL, wait_until='domcontentloaded', timeout=timeout)
+                    print("✓ Page loaded (domcontentloaded)")
+                    # Give it extra time for JS/Cloudflare challenge to resolve
+                    await page.wait_for_timeout(5000)
+                except Exception as e:
+                    print(f"⚠ First attempt failed, retrying with load event...")
+                    print(f"   Error: {str(e)[:100]}")
+                    await page.goto(WEBSITE_URL, wait_until='load', timeout=timeout)
+                    await page.wait_for_timeout(5000)
+                    print("✓ Page loaded (load)")
+
+                # Check for Cloudflare challenge
+                content = await page.content()
+
+                if 'cloudflare' in content.lower() and ('challenge' in content.lower() or 'checking' in content.lower()):
+                    print("⚠ CLOUDFLARE CHALLENGE DETECTED!")
+                    print("   Waiting 30 seconds for automatic resolution...")
+                    await page.wait_for_timeout(30000)
+
+                    content = await page.content()
+                    if 'cloudflare' in content.lower() and 'challenge' in content.lower():
+                        if not headless:
+                            print("   ⚠ Challenge still present - please solve manually in browser window")
+                            print("   Waiting 120 seconds for manual intervention...")
+                            await page.wait_for_timeout(120000)
+                        else:
+                            print("   ⚠ WARNING: Cloudflare challenge persists in headless mode")
+                            print("   Attempting to continue anyway...")
+                            await page.wait_for_timeout(20000)
+
                 # Handle cookie consent
                 try:
                     await page.wait_for_selector(SELECTORS["cookie_accept"], timeout=5000)
                     await page.click(SELECTORS["cookie_accept"])
                     print("Accepted cookies.")
-                    await page.wait_for_timeout(2000)  # Wait for cookie banner to disappear
-                except:
+                    await page.wait_for_timeout(3000)
+                except Exception:
                     print("No cookie consent needed or already accepted.")
-            
+
                 # Wait for company list to load
                 print("Waiting for company list to load...")
-                await page.wait_for_selector('ul.search-result-list', timeout=15000)
-            
+                try:
+                    await page.wait_for_selector('div.search-results', state='visible', timeout=30000)
+                    print("Search results container found.")
+
+                    await page.wait_for_selector('ul.search-result-list', state='visible', timeout=30000)
+                    print("Company list found.")
+
+                    await page.wait_for_timeout(3000)
+
+                    list_items = await page.query_selector_all('ul.search-result-list li')
+                    print(f"Found {len(list_items)} list items initially")
+
+                    if len(list_items) == 0:
+                        print("Warning: List found but no items yet, waiting longer...")
+                        await page.wait_for_timeout(5000)
+                        list_items = await page.query_selector_all('ul.search-result-list li')
+                        print(f"After waiting: {len(list_items)} list items")
+
+                except Exception as e:
+                    error_msg = f"Failed to find company list: {e}"
+                    print(f"❌ {error_msg}")
+
+                    if debug_mode:
+                        print("💾 Saving debug information...")
+                        os.makedirs(debug_dir, exist_ok=True)
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+                        screenshot_path = os.path.join(debug_dir, f'error_screenshot_{timestamp}.png')
+                        html_path = os.path.join(debug_dir, f'error_page_{timestamp}.html')
+
+                        await page.screenshot(path=screenshot_path)
+                        print(f"   ✓ Screenshot: {screenshot_path}")
+
+                        html = await page.content()
+                        with open(html_path, 'w', encoding='utf-8') as f:
+                            f.write(html)
+                        print(f"   ✓ HTML: {html_path}")
+                        print(f"   ✓ Current URL: {page.url}")
+
+                    raise Exception(error_msg)
+
                 # Get total pages
                 page_numbers = []
                 page_links = await page.query_selector_all('ul.page-selector-list li a')
@@ -43,190 +183,65 @@ async def scrape_website():
                     text = await link.inner_text()
                     if text.isdigit():
                         page_numbers.append(int(text))
-            
+
                 total_pages = max(page_numbers) if page_numbers else 1
                 print(f"Found {total_pages} pages to scrape.")
-            
+
                 # Scrape each page
                 for page_num in range(1, total_pages + 1):
                     print(f"Scraping page {page_num}/{total_pages}")
-                    
-                    # Get companies from current page
+
                     company_cards = await page.query_selector_all('ul.search-result-list li a')
-                    
+
                     for card in company_cards:
                         sector_elem = await card.query_selector('h5')
                         name_elem = await card.query_selector('h4')
 
                         name = await name_elem.inner_text() if name_elem else ""
                         sector = await sector_elem.inner_text() if sector_elem else ""
-                        
-                        if name:  # Only add if we found a name
+
+                        if name:
                             companies.append({
                                 "Company": name.strip(),
                                 "Sector": sector.strip()
                             })
-                    
+
                     # Click next page if not on last page
                     if page_num < total_pages:
+                        first_card_before = await page.query_selector('ul.search-result-list li a h4')
+                        first_name_before = await first_card_before.inner_text() if first_card_before else ""
+
                         next_page = await page.query_selector(f'ul.page-selector-list li a[data-itemnumber="{page_num + 1}"]')
                         if next_page:
                             await next_page.click()
-                            await page.wait_for_timeout(1500)  # Wait for page content to load
-                            await page.wait_for_selector('ul.search-result-list')  # Wait for company list
-            
+                            await page.wait_for_timeout(2000)
+
+                            for _ in range(10):
+                                await page.wait_for_timeout(500)
+                                first_card_after = await page.query_selector('ul.search-result-list li a h4')
+                                first_name_after = await first_card_after.inner_text() if first_card_after else ""
+                                if first_name_after != first_name_before:
+                                    print(f"  Page content changed: '{first_name_before}' -> '{first_name_after}'")
+                                    break
+
+                            await page.wait_for_selector('ul.search-result-list')
+
                 print(f"Successfully scraped {len(companies)} companies.")
-            
+
             except Exception as e:
                 print(f"Error during scraping: {e}")
                 import traceback
                 traceback.print_exc()
                 return None
-            
+
             finally:
+                await context.close()
                 await browser.close()
-    
+
     except Exception as e:
         print(f"Failed to launch browser: {e}")
         import traceback
         traceback.print_exc()
         return None
-    
+
     return pd.DataFrame(companies)
-
-def compare_companies(baseline_df, website_df):
-    """Compare baseline with website data"""
-    results = []
-    matched_website_companies = set()  # Track matched companies
-
-    for _, row in tqdm(baseline_df.iterrows(), total=len(baseline_df)):
-        best_match = None
-        best_score = 0
-
-        cr_name = str(row['CR Name']).lower().strip()
-        brand_name = str(row['Brand Name']).lower().strip()
-
-        for _, web_row in website_df.iterrows():
-            web_name = str(web_row['Company']).lower().strip()
-            
-            # Standard fuzzy match
-            score_cr = fuzz.ratio(cr_name, web_name)
-            score_brand = fuzz.ratio(brand_name, web_name)
-            score = max(score_cr, score_brand)
-            
-            # Check for acronyms in parentheses - SIMPLE APPROACH
-            # Example: "The Helicopter Company (THC)" should match with "THC"
-            acronym_match = re.search(r'\(([A-Za-z]+)\)', web_row['Company'])
-            if acronym_match:
-                acronym = acronym_match.group(1).lower()
-                # Check if CR name or brand name matches this acronym
-                if acronym.lower() == cr_name.lower() or acronym.lower() == brand_name.lower():
-                    score = max(score, 90)  # Strong match for exact acronym
-            
-            # Check if baseline name is contained in website name
-            if len(cr_name) > 2 and cr_name in web_name:
-                score = max(score, 85)
-            
-            if len(brand_name) > 2 and brand_name in web_name:
-                score = max(score, 85)
-
-            if score > best_score:
-                best_score = score
-                best_match = web_row
-
-        website_name = None
-        website_sector = None
-        exists_in_website = "No"
-        sectors_matching = "N/A"
-        status = "Add"  # Default: company needs to be ADDED to website
-
-        if best_score >= FUZZY_MATCH_THRESHOLD and best_match is not None:
-            website_name = best_match['Company']
-            website_sector = best_match['Sector']
-            exists_in_website = "Yes"
-            matched_website_companies.add(website_name)
-            
-            # Set status based on match score
-            if best_score >= 90:
-                # Check sector match
-                sector_score = fuzz.ratio(str(row['VRP Sector']).lower(), str(website_sector).lower())
-                if sector_score >= SECTOR_MATCH_THRESHOLD:
-                    status = "OK"  # Both name and sector match well
-                    sectors_matching = "Yes"
-                else:
-                    status = "Requires sector update"
-                    sectors_matching = "No"
-            else:
-                status = "Requires name update"
-                
-                # Also check sector
-                sector_score = fuzz.ratio(str(row['VRP Sector']).lower(), str(website_sector).lower())
-                sectors_matching = "Yes" if sector_score >= SECTOR_MATCH_THRESHOLD else "No"
-
-        # Always append the baseline company
-        results.append({
-            "CR Name": row['CR Name'],
-            "Brand Name": row['Brand Name'],
-            "Website Name": website_name if website_name else "",
-            "VRP Sector": row['VRP Sector'],
-            "Website Sector": website_sector if website_sector else "",
-            "Match Score": best_score,
-            "PC exist in website": exists_in_website,
-            "Sectors matching": sectors_matching,
-            "Status": status
-        })
-
-    # Process website companies that don't match any baseline company
-    for _, web_row in website_df.iterrows():
-        if web_row['Company'] not in matched_website_companies:
-            # This website company should be REMOVED (exists on website but not in baseline)
-            results.append({
-                "CR Name": "",
-                "Brand Name": "",
-                "Website Name": web_row['Company'],
-                "VRP Sector": "",
-                "Website Sector": web_row['Sector'],
-                "Match Score": 0,
-                "PC exist in website": "Yes",
-                "Sectors matching": "N/A",
-                "Status": "Remove"
-            })
-
-    return pd.DataFrame(results), pd.DataFrame([
-        {"Company": r["Website Name"], "Sector": r["Website Sector"]} 
-        for _, r in pd.DataFrame(results).iterrows() 
-        if r["Status"] == "Remove"
-    ])
-
-async def main():
-    parser = argparse.ArgumentParser(description='Compare portfolio companies')
-    parser.add_argument('baseline', help='Baseline Excel file')
-    parser.add_argument('output', help='Output Excel file')
-    
-    args = parser.parse_args()
-    
-    try:
-        print("Reading baseline data...")
-        baseline_df = pd.read_excel(args.baseline)
-        
-        print("Scraping website data...")
-        website_df = await scrape_website()
-        if website_df is None:
-            sys.exit(1)
-        
-        print("Comparing data...")
-        results_df, unmatched_df = compare_companies(baseline_df, website_df)
-        
-        print("Saving results...")
-        with pd.ExcelWriter(args.output, engine='openpyxl') as writer:
-            results_df.to_excel(writer, sheet_name='Comparison Results', index=False)
-            unmatched_df.to_excel(writer, sheet_name='Unmatched Website Companies', index=False)
-        print(f"Results saved to {args.output}")
-        
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
-
-if __name__ == '__main__':
-    asyncio.run(main())
-

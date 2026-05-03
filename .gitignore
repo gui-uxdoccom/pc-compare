@@ -69,12 +69,5 @@ log.txt
 *.backup
 *~
 
-# Test files
-test_*.py
-*_test.py
-
-# Legacy files (non-webview version)
-bkp-compare.py
-baseline.xlsx
-Oput.xlsx
-Revised*.xlsx
+# Git worktrees
+.worktrees/

@@ -20,23 +20,10 @@ class EnhancedCompanyMatcher:
             'holding company', 'holding co', 'holding corp', 'holding corporation',
             'investment company', 'investment co', 'trading company', 'trading co',
             'company limited', 'company ltd', 'co limited', 'co ltd',
-            'corporation', 'corp', 'incorporated', 'inc', 
+            'corporation', 'corp', 'incorporated', 'inc',
             'limited', 'ltd', 'limited liability company', 'llc',
             'holding', 'company', 'co', 'group', 'plc', 'sa', 'bsc', 'ksc'
         ]
-        
-        # Sector synonyms mapping
-        self.sector_synonyms = {
-            'technology': ['tech', 'it', 'information technology', 'software'],
-            'healthcare': ['health', 'medical', 'pharma', 'pharmaceutical'],
-            'financial services': ['finance', 'banking', 'bank', 'financial'],
-            'real estate': ['property', 'realty', 'real estate development'],
-            'energy': ['oil', 'gas', 'petroleum', 'renewable energy'],
-            'telecommunications': ['telecom', 'communications', 'mobile'],
-            'manufacturing': ['industrial', 'production', 'factory'],
-            'retail': ['consumer', 'shopping', 'commerce'],
-            'transportation': ['logistics', 'shipping', 'transport']
-        }
 
     def normalize_company_name(self, name: str) -> str:
         """Normalize company name by removing common suffixes and cleaning"""
@@ -204,49 +191,31 @@ class EnhancedCompanyMatcher:
             'confidence': 'high' if best_fuzzy >= 92 else 'medium' if best_fuzzy >= 85 else 'low'
         }
 
-    def normalize_sector(self, sector: str) -> str:
-        """Normalize sector name using synonyms"""
-        if not sector or pd.isna(sector):
+    def normalize_categorical(self, value: str) -> str:
+        """Lowercase + strip; return '' for null/empty inputs."""
+        if pd.isna(value) or not value:
             return ""
-        
-        sector_lower = str(sector).lower().strip()
-        
-        # Check for exact matches in synonyms
-        for main_sector, synonyms in self.sector_synonyms.items():
-            if sector_lower == main_sector or sector_lower in synonyms:
-                return main_sector
-        
-        return sector_lower
+        return str(value).lower().strip()
 
-    def compare_sectors(self, baseline_sector: str, website_sector: str) -> Dict:
-        """Compare sectors with normalization and synonyms"""
-        norm_baseline = self.normalize_sector(baseline_sector)
-        norm_website = self.normalize_sector(website_sector)
-        
+    def compare_categorical(self, baseline_value: str, website_value: str) -> dict:
+        """Compare categorical values with normalization and fuzzy matching."""
+        norm_baseline = self.normalize_categorical(baseline_value)
+        norm_website = self.normalize_categorical(website_value)
+
+        if not norm_baseline or not norm_website:
+            return {"match": False, "score": 0,
+                    "normalized_baseline": norm_baseline,
+                    "normalized_website": norm_website}
+
         if norm_baseline == norm_website:
-            return {
-                'match': True,
-                'score': 100,
-                'normalized_baseline': norm_baseline,
-                'normalized_website': norm_website
-            }
-        
-        # Fuzzy match for sectors
-        if norm_baseline and norm_website:
-            score = fuzz.ratio(norm_baseline, norm_website)
-            return {
-                'match': score >= self.sector_threshold,
-                'score': score,
-                'normalized_baseline': norm_baseline,
-                'normalized_website': norm_website
-            }
-        
-        return {
-            'match': False,
-            'score': 0,
-            'normalized_baseline': norm_baseline,
-            'normalized_website': norm_website
-        }
+            return {"match": True, "score": 100,
+                    "normalized_baseline": norm_baseline,
+                    "normalized_website": norm_website}
+
+        score = fuzz.ratio(norm_baseline, norm_website)
+        return {"match": score >= self.sector_threshold, "score": score,
+                "normalized_baseline": norm_baseline,
+                "normalized_website": norm_website}
 
     def debug_match(self, baseline_name: str, website_name: str) -> None:
         """Debug function to understand why two companies matched"""
@@ -322,8 +291,8 @@ def enhanced_compare_companies(baseline_df: pd.DataFrame, website_df: pd.DataFra
             matched_website_companies.add(website_name)
             
             # Check sector match
-            sector_comparison = matcher.compare_sectors(
-                baseline_row.get('VRP Sector', ''), 
+            sector_comparison = matcher.compare_categorical(
+                baseline_row.get('VRP Sector', ''),
                 website_sector
             )
             

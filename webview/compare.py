@@ -89,6 +89,33 @@ async def _open_portfolio_page(playwright, headless, browser_type, timeout):
     return browser, context, page
 
 
+async def _discover_facets(page) -> dict:
+    """Read facet values from the Portfolio and Ecosystem panels.
+
+    Returns {"portfolio": [...values...], "ecosystem": [...values...]}.
+    Values come from the `data-facetvalue` attribute and are URL-encoded —
+    the caller decodes them before display.
+    """
+    from urllib.parse import unquote
+
+    async def _read(panel_selector: str) -> list[str]:
+        items = await page.query_selector_all(
+            f'{panel_selector} {SELECTORS["facet_item"]}'
+        )
+        values = []
+        for item in items:
+            raw = await item.get_attribute(SELECTORS["facet_value_attr"])
+            if raw:
+                values.append(unquote(raw))
+        return values
+
+    portfolio = await _read(SELECTORS["portfolio_facet_panel"])
+    ecosystem = await _read(SELECTORS["ecosystem_facet_panel"])
+
+    print(f"Discovered facets: portfolio={portfolio}, ecosystem={ecosystem}")
+    return {"portfolio": portfolio, "ecosystem": ecosystem}
+
+
 async def scrape_website(headless=True, browser_type='firefox', debug_mode=False, timeout=60000):
     """Scrape company data from website with Cloudflare bypass via playwright-stealth.
 

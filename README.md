@@ -20,10 +20,25 @@ Open `http://127.0.0.1:5000` and upload a baseline `.xlsx` file with columns: `C
 ## How It Works
 
 1. **Upload** — `POST /upload` accepts the Excel file plus scraping options (browser, headless, debug, timeout) and returns a `result_id`.
-2. **Background scrape** — Flask spawns a thread that runs [`compare.scrape_website()`](webview/compare.py), an async Playwright job that uses [`playwright-stealth`](https://github.com/AtuboDad/playwright_stealth) to bypass Cloudflare on the PIF site. Firefox is the default browser (best Cloudflare bypass rate).
+2. **Background scrape** — Flask spawns a thread that runs [`compare.scrape_website()`](webview/compare.py), which traverses the PIF site's facet filters (3 Portfolio facets + 6 Ecosystem facets) using Playwright + [`playwright-stealth`](https://github.com/AtuboDad/playwright_stealth). Each facet pass scrapes the filtered company list across pagination; results are merged into a single `(Company, Portfolio, Ecosystem)` table. Firefox is the default (best Cloudflare bypass).
 3. **Match** — [`enhanced_matching.enhanced_compare_companies()`](webview/enhanced_matching.py) runs the baseline rows against the scraped list using five strategies in order: exact normalized → core name → acronym/substring → token-based → fuzzy fallback. See thresholds in [webview/config.py](webview/config.py).
 4. **Persist & summarize** — [`results_analyzer.ResultsSummarizer`](webview/results_analyzer.py) writes a 3-sheet Excel report (Comparison Results, Unmatched Website Companies, Summary) and saves a row per run plus per-company history into `webview/comparison_history.db` (SQLite) for quarter-over-quarter trend analysis.
 5. **Poll & download** — Browser polls `GET /status/<result_id>`, then fetches `GET /summary/<result_id>` and `GET /download/<result_id>` when complete.
+
+## Supported Baseline Templates
+
+The app accepts two Excel formats and auto-detects which one was uploaded based on column headers.
+
+**Legacy template** (existing stakeholder):
+- Required columns: `CR Name`, `Brand Name`, `VRP Sector`
+- Comparison: name + presence only. Sector is no longer compared because the website's card-level sector field has been removed.
+
+**New template** (extended stakeholder):
+- Required columns: `CR Name`, `Brand Name`, `Portfolio`, `Ecosystem` (other columns are tolerated and ignored)
+- Comparison: name + presence + Portfolio assignment + Ecosystem assignment.
+- `Ecosystem` is sparse — rows with no Ecosystem value are reported as `N/A` rather than as mismatches.
+
+Uploading a file that matches neither shape returns HTTP 400 with the expected column lists.
 
 ## Project Layout
 

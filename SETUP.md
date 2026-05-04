@@ -43,10 +43,13 @@ python app.py
 Open your browser and go to: `http://127.0.0.1:5000`
 
 ## Usage
-1. Upload your baseline Excel file (with CR Name, Brand Name, VRP Sector columns)
-2. Wait for processing (real-time progress updates)
-3. Review the comprehensive dashboard
-4. Download the enhanced Excel report
+
+1. Upload a baseline Excel file. Two templates are accepted:
+   - Legacy: columns `CR Name`, `Brand Name`, `VRP Sector`.
+   - New: columns `CR Name`, `Brand Name`, `Portfolio`, `Ecosystem` (extra columns are ignored).
+2. Wait for processing (typically 1–3 minutes — the scraper traverses facet filters on the PIF site).
+3. Review the dashboard. Issue counts shown depend on which template was detected.
+4. Download the enhanced Excel report.
 
 ## Troubleshooting
 

@@ -3,11 +3,9 @@ import sys
 import asyncio
 import threading
 import pandas as pd
-import json
 from flask import Flask, request, jsonify, render_template, send_file
 from werkzeug.utils import secure_filename
 from datetime import datetime
-import tempfile
 
 # Ensure webview/ directory is on path so imports work regardless of CWD
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

@@ -116,6 +116,107 @@ async def _discover_facets(page) -> dict:
     return {"portfolio": portfolio, "ecosystem": ecosystem}
 
 
+async def _scrape_with_facet(page, panel_selector: str, facet_value: str) -> list[str]:
+    """Click one facet checkbox, paginate the filtered list, return company names, then uncheck.
+
+    Asserts that the result list visibly changed after the click — if it didn't,
+    we abort this facet and return an empty list rather than scrape the
+    unfiltered list silently.
+    """
+    from urllib.parse import quote
+
+    encoded = quote(facet_value)
+    item_selector = (
+        f'{panel_selector} {SELECTORS["facet_item"]}'
+        f'[{SELECTORS["facet_value_attr"]}="{encoded}"]'
+    )
+
+    # Capture the first card's name so we can detect a change
+    before_card = await page.query_selector('ul.search-result-list li a h4')
+    before_name = await before_card.inner_text() if before_card else ""
+    before_count_elems = await page.query_selector_all('ul.search-result-list li')
+    before_count = len(before_count_elems)
+
+    # Click the facet's checkbox
+    try:
+        item = await page.wait_for_selector(item_selector, timeout=10000)
+        checkbox = await item.query_selector(SELECTORS["facet_checkbox"])
+        target = checkbox or item
+        await target.click()
+    except Exception as e:
+        print(f"  ⚠ could not click facet '{facet_value}': {e}")
+        return []
+
+    # Wait for the list to actually change
+    changed = False
+    for _ in range(20):
+        await page.wait_for_timeout(500)
+        after_card = await page.query_selector('ul.search-result-list li a h4')
+        after_name = await after_card.inner_text() if after_card else ""
+        after_count = len(await page.query_selector_all('ul.search-result-list li'))
+        if after_name != before_name or after_count != before_count:
+            changed = True
+            break
+
+    if not changed:
+        print(f"  ⚠ facet '{facet_value}' click had no visible effect; skipping")
+        # Try to uncheck anyway to restore state
+        try:
+            await target.click()
+            await page.wait_for_timeout(1000)
+        except Exception:
+            pass
+        return []
+
+    # Determine total pages for the filtered list
+    page_links = await page.query_selector_all('ul.page-selector-list li a')
+    page_numbers = []
+    for link in page_links:
+        text = await link.inner_text()
+        if text.isdigit():
+            page_numbers.append(int(text))
+    total_pages = max(page_numbers) if page_numbers else 1
+
+    names: list[str] = []
+    for page_num in range(1, total_pages + 1):
+        cards = await page.query_selector_all('ul.search-result-list li a')
+        for card in cards:
+            name_elem = await card.query_selector('h4')
+            if name_elem:
+                name = (await name_elem.inner_text()).strip()
+                if name:
+                    names.append(name)
+
+        if page_num < total_pages:
+            first_before = await page.query_selector('ul.search-result-list li a h4')
+            first_before_name = await first_before.inner_text() if first_before else ""
+            next_link = await page.query_selector(
+                f'ul.page-selector-list li a[data-itemnumber="{page_num + 1}"]'
+            )
+            if next_link:
+                await next_link.click()
+                for _ in range(10):
+                    await page.wait_for_timeout(500)
+                    first_after = await page.query_selector('ul.search-result-list li a h4')
+                    first_after_name = await first_after.inner_text() if first_after else ""
+                    if first_after_name != first_before_name:
+                        break
+
+    # Uncheck the facet to restore the unfiltered state for the next pass
+    try:
+        item = await page.query_selector(item_selector)
+        checkbox = await item.query_selector(SELECTORS["facet_checkbox"]) if item else None
+        target = checkbox or item
+        if target:
+            await target.click()
+            await page.wait_for_timeout(1000)
+    except Exception:
+        pass
+
+    print(f"  ✓ facet '{facet_value}': {len(names)} companies")
+    return names
+
+
 async def scrape_website(headless=True, browser_type='firefox', debug_mode=False, timeout=60000):
     """Scrape company data from website with Cloudflare bypass via playwright-stealth.
 

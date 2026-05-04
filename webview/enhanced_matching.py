@@ -263,93 +263,136 @@ class EnhancedCompanyMatcher:
         
         return best_match, best_score_info
 
-def enhanced_compare_companies(baseline_df: pd.DataFrame, website_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Enhanced company comparison with improved matching"""
-    
+def _build_result_row(
+    matcher: 'EnhancedCompanyMatcher',
+    baseline_row: pd.Series,
+    best_match,
+    match_info: dict,
+    spec: 'TemplateSpec',
+) -> dict:
+    """Build a single result row, including spec-conditional columns."""
+    exists = match_info['score'] >= matcher.fuzzy_threshold and best_match is not None
+    website_name = best_match['Company'] if exists else ""
+
+    row = {
+        "CR Name": baseline_row.get(spec.name_field, ''),
+        "Brand Name": baseline_row.get(spec.brand_field, ''),
+        "Website Name": website_name,
+    }
+
+    name_matches = exists and match_info['score'] >= matcher.exact_match_threshold
+    field_mismatch = False
+
+    if spec.portfolio_field is not None:
+        baseline_portfolio = baseline_row.get(spec.portfolio_field, '')
+        website_portfolio = best_match['Portfolio'] if exists else ''
+        if not baseline_portfolio:
+            portfolio_match = "N/A"
+        elif not exists:
+            portfolio_match = "N/A"
+        else:
+            cmp = matcher.compare_categorical(baseline_portfolio, website_portfolio)
+            portfolio_match = "Yes" if cmp['match'] else "No"
+            if not cmp['match']:
+                field_mismatch = True
+        row["Portfolio"] = baseline_portfolio
+        row["Website Portfolio"] = website_portfolio
+        row["Portfolio Match"] = portfolio_match
+
+    if spec.ecosystem_field is not None:
+        baseline_ecosystem = baseline_row.get(spec.ecosystem_field, '')
+        website_ecosystem = (best_match['Ecosystem'] if exists else '') or ''
+        if not baseline_ecosystem or pd.isna(baseline_ecosystem):
+            ecosystem_match = "N/A"
+        elif not exists:
+            ecosystem_match = "N/A"
+        else:
+            cmp = matcher.compare_categorical(baseline_ecosystem, website_ecosystem)
+            ecosystem_match = "Yes" if cmp['match'] else "No"
+            if not cmp['match']:
+                field_mismatch = True
+        row["Ecosystem"] = baseline_ecosystem
+        row["Website Ecosystem"] = website_ecosystem
+        row["Ecosystem Match"] = ecosystem_match
+
+    row.update({
+        "Match Score": round(match_info['score'], 1),
+        "Match Type": match_info.get('match_type', 'none'),
+        "Match Confidence": match_info.get('confidence', 'none'),
+        "Matched Field": match_info.get('matched_field', 'N/A'),
+        "PC exist in website": "Yes" if exists else "No",
+    })
+
+    if not exists:
+        row["Status"] = "Add"
+    elif not name_matches or field_mismatch:
+        row["Status"] = "Requires update"
+    else:
+        row["Status"] = "OK"
+
+    return row
+
+
+def _build_remove_row(website_row: pd.Series, spec: 'TemplateSpec') -> dict:
+    """Build a result row for an unmatched website company."""
+    row = {
+        "CR Name": "",
+        "Brand Name": "",
+        "Website Name": website_row['Company'],
+    }
+    if spec.portfolio_field is not None:
+        row["Portfolio"] = ""
+        row["Website Portfolio"] = website_row.get('Portfolio', '') or ''
+        row["Portfolio Match"] = "N/A"
+    if spec.ecosystem_field is not None:
+        row["Ecosystem"] = ""
+        row["Website Ecosystem"] = website_row.get('Ecosystem', '') or ''
+        row["Ecosystem Match"] = "N/A"
+    row.update({
+        "Match Score": 0,
+        "Match Type": "unmatched",
+        "Match Confidence": "none",
+        "Matched Field": "N/A",
+        "PC exist in website": "Yes",
+        "Status": "Remove",
+    })
+    return row
+
+
+def enhanced_compare_companies(
+    baseline_df: pd.DataFrame,
+    website_df: pd.DataFrame,
+    template_spec,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Compare baseline against website using the supplied TemplateSpec."""
     matcher = EnhancedCompanyMatcher()
     results = []
     matched_website_companies = set()
-    
-    print(f"Starting enhanced comparison of {len(baseline_df)} baseline companies against {len(website_df)} website companies...")
-    
+
+    print(f"Comparing {len(baseline_df)} baseline companies against "
+          f"{len(website_df)} website companies (template={template_spec.kind})...")
+
     for idx, baseline_row in baseline_df.iterrows():
-        print(f"Processing company {idx + 1}/{len(baseline_df)}: {baseline_row.get('CR Name', 'N/A')}")
-        
         best_match, match_info = matcher.find_best_match(baseline_row, website_df)
-        
-        # Determine status based on match quality
-        status = "Add"  # Default: needs to be added to website
-        website_name = ""
-        website_sector = ""
-        sectors_match = "N/A"
-        exists_in_website = "No"
-        
-        if match_info['score'] >= matcher.fuzzy_threshold and best_match is not None:
-            website_name = best_match['Company']
-            website_sector = best_match['Sector']
-            exists_in_website = "Yes"
-            matched_website_companies.add(website_name)
-            
-            # Check sector match
-            sector_comparison = matcher.compare_categorical(
-                baseline_row.get('VRP Sector', ''),
-                website_sector
-            )
-            
-            sectors_match = "Yes" if sector_comparison['match'] else "No"
-            
-            # Determine final status
-            if match_info['score'] >= matcher.exact_match_threshold:
-                if sector_comparison['match']:
-                    status = "OK"
-                else:
-                    status = "Requires sector update"
-            else:
-                status = "Requires name update"
-        
-        # Store detailed result
-        result = {
-            "CR Name": baseline_row.get('CR Name', ''),
-            "Brand Name": baseline_row.get('Brand Name', ''),
-            "Website Name": website_name,
-            "VRP Sector": baseline_row.get('VRP Sector', ''),
-            "Website Sector": website_sector,
-            "Match Score": round(match_info['score'], 1),
-            "Match Type": match_info.get('match_type', 'none'),
-            "Match Confidence": match_info.get('confidence', 'none'),
-            "Matched Field": match_info.get('matched_field', 'N/A'),
-            "PC exist in website": exists_in_website,
-            "Sectors matching": sectors_match,
-            "Status": status
-        }
-        
-        results.append(result)
-    
-    # Handle unmatched website companies (should be removed)
+        if best_match is not None and match_info['score'] >= matcher.fuzzy_threshold:
+            matched_website_companies.add(best_match['Company'])
+        results.append(_build_result_row(matcher, baseline_row, best_match, match_info, template_spec))
+
     for _, website_row in website_df.iterrows():
         if website_row['Company'] not in matched_website_companies:
-            results.append({
-                "CR Name": "",
-                "Brand Name": "",
-                "Website Name": website_row['Company'],
-                "VRP Sector": "",
-                "Website Sector": website_row['Sector'],
-                "Match Score": 0,
-                "Match Type": "unmatched",
-                "Match Confidence": "none",
-                "Matched Field": "N/A",
-                "PC exist in website": "Yes",
-                "Sectors matching": "N/A",
-                "Status": "Remove"
-            })
-    
+            results.append(_build_remove_row(website_row, template_spec))
+
     results_df = pd.DataFrame(results)
-    
-    # Create unmatched website companies dataframe
-    unmatched_df = pd.DataFrame([
-        {"Company": r["Website Name"], "Sector": r["Website Sector"]} 
-        for r in results 
-        if r["Status"] == "Remove"
-    ])
-    
+
+    unmatched_rows = []
+    for _, website_row in website_df.iterrows():
+        if website_row['Company'] not in matched_website_companies:
+            entry = {"Company": website_row['Company']}
+            if 'Portfolio' in website_df.columns:
+                entry["Portfolio"] = website_row.get('Portfolio', '')
+            if 'Ecosystem' in website_df.columns:
+                entry["Ecosystem"] = website_row.get('Ecosystem', '')
+            unmatched_rows.append(entry)
+    unmatched_df = pd.DataFrame(unmatched_rows)
+
     return results_df, unmatched_df

@@ -48,6 +48,18 @@ def upload_file():
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(filepath)
 
+    # Validate template synchronously so the client gets immediate 400 feedback
+    # rather than having to poll for an async error.
+    try:
+        baseline_df = pd.read_excel(filepath)
+        detect_template(baseline_df)
+    except ValueError as ve:
+        os.remove(filepath)
+        return jsonify({'error': str(ve)}), 400
+    except Exception as e:
+        os.remove(filepath)
+        return jsonify({'error': f'Failed to read Excel file: {e}'}), 400
+
     # Get scraping options from request
     browser_type = request.form.get('browser_type', 'firefox')  # Firefox has better Cloudflare bypass
     headless_mode = request.form.get('headless', 'true').lower() == 'true'
@@ -82,13 +94,9 @@ async def process_file(filepath, output_path, result_id, browser_type='firefox',
         baseline_df = pd.read_excel(filepath)
         print(f"Loaded {len(baseline_df)} companies from baseline file")
 
-        try:
-            template_spec = detect_template(baseline_df)
-            print(f"Detected template: {template_spec.kind}")
-        except ValueError as ve:
-            processing_results[result_id] = {'status': 'error', 'message': str(ve)}
-            print(f"ERROR: {ve}")
-            return
+        # Template was already validated in /upload; this is just to get the spec
+        template_spec = detect_template(baseline_df)
+        print(f"Detected template: {template_spec.kind}")
 
         print("Starting website scraping...")
         try:

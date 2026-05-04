@@ -68,19 +68,21 @@ Results land in `webview/uploads/results_<YYYYMMDDHHMMSS>.xlsx`. Status values p
 
 | Status | Meaning |
 |--------|---------|
-| `OK` | Name and sector both match |
+| `OK` | All applicable fields match (name + Portfolio + Ecosystem) |
 | `Add` | In baseline, missing from website |
 | `Remove` | On website, missing from baseline |
-| `Requires name update` | Matched but name differs |
-| `Requires sector update` | Matched but sector differs |
+| `Requires update` | Present on both sides but at least one field differs — see per-field columns (`Match Score`, `Portfolio Match`, `Ecosystem Match`) for which |
+
+For the new template, the per-field `Portfolio Match` / `Ecosystem Match` columns take values `Yes`, `No`, or `N/A` (the latter when the baseline cell is empty or the company isn't on the website).
 
 ## Configuration
 
 Edit [webview/config.py](webview/config.py):
 
 - `WEBSITE_URL` — target portfolio page
-- `FUZZY_MATCH_THRESHOLD` (default 85), `SECTOR_MATCH_THRESHOLD` (default 80)
-- `SELECTORS` — CSS selectors for cookie banner, pagination, company cards. Update these if the PIF site changes its markup.
+- `FUZZY_MATCH_THRESHOLD` (default 90) — minimum score for fuzzy name matching
+- `SECTOR_MATCH_THRESHOLD` (default 80) — minimum score for categorical (Portfolio/Ecosystem) matching
+- `SELECTORS` — CSS selectors for cookie banner, pagination, company cards, and facet panels. Update these if the PIF site changes its markup.
 
 ## Cloudflare Troubleshooting
 
@@ -99,3 +101,7 @@ Full escalation path (incl. switching to `camoufox` or a managed bypass proxy) i
 - Python 3.8+
 - Playwright browsers (Firefox required, Chromium recommended)
 - Outbound HTTPS to `pif.gov.sa`
+
+## Upgrading from a previous version
+
+The SQLite history schema changed in this release (sector columns removed, Portfolio + Ecosystem columns added). If you have an existing `webview/comparison_history.db` from a previous version, **delete it before first run** — the app will create a fresh one with the current schema. Old run history is not migrated.

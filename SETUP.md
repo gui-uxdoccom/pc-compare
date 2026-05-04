@@ -59,8 +59,9 @@ Open your browser and go to: `http://127.0.0.1:5000`
 - **Module not found**: Ensure virtual environment is activated and requirements installed
 
 ### Support
-- Check the detailed documentation in `README_ENHANCED.md`
-- Review the configuration options in `config.py`
+- Full architectural overview is in `README.md`
+- Review the configuration options in `webview/config.py`
+- Cloudflare bypass strategies are in `CLOUDFLARE_TROUBLESHOOTING.md`
 
 ## Features Highlights
 - 99%+ matching accuracy with multi-strategy algorithms

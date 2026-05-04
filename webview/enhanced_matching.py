@@ -2,11 +2,12 @@ import re
 from rapidfuzz import fuzz
 import pandas as pd
 from typing import Dict, Tuple, Optional
+from config import FUZZY_MATCH_THRESHOLD, SECTOR_MATCH_THRESHOLD
 
 class EnhancedCompanyMatcher:
     def __init__(self,
-                 fuzzy_threshold: int = 90,
-                 sector_threshold: int = 80,
+                 fuzzy_threshold: int = FUZZY_MATCH_THRESHOLD,
+                 sector_threshold: int = SECTOR_MATCH_THRESHOLD,
                  exact_match_threshold: int = 95):
 
         self.fuzzy_threshold = fuzzy_threshold

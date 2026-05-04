@@ -1,6 +1,6 @@
 # Configuration settings
 WEBSITE_URL = "https://www.pif.gov.sa/en/our-investments/our-portfolio/"
-FUZZY_MATCH_THRESHOLD = 85       # Minimum score for fuzzy matching
+FUZZY_MATCH_THRESHOLD = 90       # Minimum score for fuzzy matching (raised from 85 to reduce false positives)
 SECTOR_MATCH_THRESHOLD = 80      # Minimum score for categorical (portfolio/ecosystem) matching
 
 # Selectors for web scraping

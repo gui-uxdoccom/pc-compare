@@ -261,15 +261,19 @@ async def scrape_website(headless=True, browser_type='firefox', debug_mode=False
             try:
                 facets = await _discover_facets(page)
 
-                # Pass 1: Portfolio facets — defines the company universe
+                # Pass 1: Portfolio facets — defines the company universe.
+                # Website tags portfolios with the suffix " Portfolio"
+                # (e.g. "Vision Portfolio") but the baseline template uses bare
+                # names ("Vision"); strip the suffix before storing.
                 portfolio_map: dict[str, str] = {}
                 for value in facets["portfolio"]:
                     print(f"Scraping portfolio facet: {value}")
                     names = await _scrape_with_facet(
                         page, SELECTORS["portfolio_facet_panel"], value,
                     )
+                    portfolio_label = value.removesuffix(" Portfolio")
                     for name in names:
-                        portfolio_map[name] = value
+                        portfolio_map[name] = portfolio_label
 
                 # Pass 2: Ecosystem facets — enriches the universe
                 ecosystem_map: dict[str, str] = {}

@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from compare import scrape_website
 from enhanced_matching import enhanced_compare_companies
 from results_analyzer import ResultsSummarizer
+from template_spec import detect_template
 
 # Create Flask app with custom template folder
 app = Flask(__name__,
@@ -81,25 +82,33 @@ async def process_file(filepath, output_path, result_id, browser_type='firefox',
         baseline_df = pd.read_excel(filepath)
         print(f"Loaded {len(baseline_df)} companies from baseline file")
 
+        try:
+            template_spec = detect_template(baseline_df)
+            print(f"Detected template: {template_spec.kind}")
+        except ValueError as ve:
+            processing_results[result_id] = {'status': 'error', 'message': str(ve)}
+            print(f"ERROR: {ve}")
+            return
+
         print("Starting website scraping...")
         try:
             website_df = await scrape_website(
                 headless=headless,
                 browser_type=browser_type,
                 debug_mode=debug,
-                timeout=timeout
+                timeout=timeout,
             )
             if website_df is None:
                 processing_results[result_id] = {
                     'status': 'error',
-                    'message': 'Failed to scrape website. Check server logs. Try Firefox browser or visible mode.'
+                    'message': 'Failed to scrape website. Check server logs. Try Firefox or visible mode.',
                 }
                 print("ERROR: Website scraping returned None")
                 return
         except Exception as e:
             error_msg = f'Failed to scrape website: {str(e)}'
             if 'ERR_NAME_NOT_RESOLVED' in str(e) or 'Cloudflare' in str(e) or '403' in str(e):
-                error_msg += '\n\nSuggestions:\n- Try Firefox browser (better Cloudflare bypass)\n- Enable visible mode to solve CAPTCHA manually\n- Check your internet connection'
+                error_msg += '\n\nSuggestions:\n- Try Firefox (better Cloudflare bypass)\n- Enable visible mode to solve CAPTCHA manually\n- Check internet connection'
             processing_results[result_id] = {'status': 'error', 'message': error_msg}
             print(f"ERROR: {error_msg}")
             import traceback
@@ -109,13 +118,14 @@ async def process_file(filepath, output_path, result_id, browser_type='firefox',
         print(f"Scraped {len(website_df)} companies from website")
 
         print("Starting enhanced comparison...")
-        results_df, unmatched_df = enhanced_compare_companies(baseline_df, website_df)
+        results_df, unmatched_df = enhanced_compare_companies(baseline_df, website_df, template_spec)
 
         print("Generating summary and historical analysis...")
         summary = summarizer.save_and_summarize(
             results_df,
             os.path.basename(filepath),
-            len(website_df)
+            len(website_df),
+            template_spec,
         )
 
         print("Saving results to Excel...")
@@ -123,11 +133,16 @@ async def process_file(filepath, output_path, result_id, browser_type='firefox',
             results_df.to_excel(writer, sheet_name='Comparison Results', index=False)
             unmatched_df.to_excel(writer, sheet_name='Unmatched Website Companies', index=False)
 
-            summary_df = pd.DataFrame([{
-                'Metric': k.replace('_', ' ').title(),
-                'Value': v
-            } for k, v in summary['current_analysis']['totals'].items()])
-            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            current = summary['current_analysis']
+            summary_rows = [
+                {'Metric': k.replace('_', ' ').title(), 'Value': v}
+                for k, v in current['totals'].items()
+            ]
+            summary_rows.extend(
+                {'Metric': k.replace('_', ' ').title(), 'Value': v}
+                for k, v in current['status_breakdown'].items()
+            )
+            pd.DataFrame(summary_rows).to_excel(writer, sheet_name='Summary', index=False)
 
         processing_results[result_id] = {
             'status': 'complete',

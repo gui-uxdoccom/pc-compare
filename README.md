@@ -102,6 +102,24 @@ Full escalation path (incl. switching to `camoufox` or a managed bypass proxy) i
 - Playwright browsers (Firefox required, Chromium recommended)
 - Outbound HTTPS to `pif.gov.sa`
 
+## Testing
+
+**Unit tests** (no network, ~1s):
+
+```bash
+pytest webview/tests/ -v
+```
+
+**End-to-end smoke test** against the live PIF site (~2 min):
+
+```bash
+python3 webview/app.py &                          # start the app
+python3 webview/smoke_test.py                     # uploads new-template.xlsx, polls, downloads, asserts schema
+python3 webview/smoke_test.py --baseline path/to/your.xlsx
+```
+
+Exits 0 on success; prints the actual sheet/column/status breakdown of the downloaded result.
+
 ## Upgrading from a previous version
 
 The SQLite history schema changed in this release (sector columns removed, Portfolio + Ecosystem columns added). If you have an existing `webview/comparison_history.db` from a previous version, **delete it before first run** — the app will create a fresh one with the current schema. Old run history is not migrated.

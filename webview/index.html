@@ -475,49 +475,48 @@
                     </div>
                 `;
                 
-                // Show issues if any
-                const totalIssues = statusBreakdown.missing_from_website + 
-                                  statusBreakdown.extra_on_website + 
-                                  statusBreakdown.name_updates_needed + 
-                                  statusBreakdown.sector_updates_needed;
-                
-                if (totalIssues > 0) {
+                // Issues breakdown — render whichever keys the backend included
+                const issueLabels = {
+                    missing_from_website: 'companies missing from website',
+                    extra_on_website: 'extra companies on website',
+                    name_mismatches: 'companies need name updates',
+                    portfolio_mismatches: 'companies need portfolio updates',
+                    ecosystem_mismatches: 'companies need ecosystem updates',
+                };
+                const renderOrder = [
+                    'missing_from_website',
+                    'extra_on_website',
+                    'name_mismatches',
+                    'portfolio_mismatches',
+                    'ecosystem_mismatches',
+                ];
+                const issueLines = renderOrder
+                    .filter(key => (statusBreakdown[key] || 0) > 0)
+                    .map(key => `<li><strong>${statusBreakdown[key]}</strong> ${issueLabels[key]}</li>`);
+
+                if (issueLines.length > 0) {
                     issuesCard.style.display = 'block';
-                    let issuesHtml = '<ul>';
-                    
-                    if (statusBreakdown.missing_from_website > 0) {
-                        issuesHtml += `<li><strong>${statusBreakdown.missing_from_website}</strong> companies missing from website</li>`;
-                    }
-                    if (statusBreakdown.extra_on_website > 0) {
-                        issuesHtml += `<li><strong>${statusBreakdown.extra_on_website}</strong> extra companies on website</li>`;
-                    }
-                    if (statusBreakdown.name_updates_needed > 0) {
-                        issuesHtml += `<li><strong>${statusBreakdown.name_updates_needed}</strong> companies need name updates</li>`;
-                    }
-                    if (statusBreakdown.sector_updates_needed > 0) {
-                        issuesHtml += `<li><strong>${statusBreakdown.sector_updates_needed}</strong> companies need sector updates</li>`;
-                    }
-                    
-                    issuesHtml += '</ul>';
-                    issuesSummary.innerHTML = issuesHtml;
+                    issuesSummary.innerHTML = `<ul>${issueLines.join('')}</ul>`;
                 }
                 
-                // Show historical comparison if available
+                // Historical comparison — iterate whatever keys the payload includes
                 const historical = summary.historical_comparison;
                 if (historical.has_historical_data) {
                     historicalCard.style.display = 'block';
                     const trend = historical.overall_trend;
                     const trendClass = `trend-${trend}`;
-                    
+
+                    const changeLines = Object.entries(historical.changes || {}).map(([key, info]) => {
+                        const label = issueLabels[key] || key.replaceAll('_', ' ');
+                        const sign = info.change >= 0 ? '+' : '';
+                        return `<li>${label}: ${info.current} (${sign}${info.change})</li>`;
+                    });
+
                     historicalComparison.innerHTML = `
-                        <p>Compared to previous quarter: <span class="trend-indicator ${trendClass}">${trend.toUpperCase()}</span></p>
+                        <p>Compared to previous run: <span class="trend-indicator ${trendClass}">${trend.toUpperCase()}</span></p>
                         <div class="historical-details">
                             <p><strong>Changes since last run:</strong></p>
-                            <ul>
-                                <li>Perfect matches: ${historical.changes.ok.current} (${historical.changes.ok.change >= 0 ? '+' : ''}${historical.changes.ok.change})</li>
-                                <li>Missing companies: ${historical.changes.missing_from_website.current} (${historical.changes.missing_from_website.change >= 0 ? '+' : ''}${historical.changes.missing_from_website.change})</li>
-                                <li>Name updates needed: ${historical.changes.name_updates_needed.current} (${historical.changes.name_updates_needed.change >= 0 ? '+' : ''}${historical.changes.name_updates_needed.change})</li>
-                            </ul>
+                            <ul>${changeLines.join('')}</ul>
                         </div>
                     `;
                 }

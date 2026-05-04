@@ -244,6 +244,18 @@ async def scrape_website(headless=True, browser_type='firefox', debug_mode=False
                     await page.screenshot(path=os.path.join(debug_dir, f'error_screenshot_{ts}.png'))
                     with open(os.path.join(debug_dir, f'error_page_{ts}.html'), 'w', encoding='utf-8') as f:
                         f.write(await page.content())
+                # Explicit cleanup — _open_portfolio_page may have allocated
+                # browser/context before failing
+                if context is not None:
+                    try:
+                        await context.close()
+                    except Exception:
+                        pass
+                if browser is not None:
+                    try:
+                        await browser.close()
+                    except Exception:
+                        pass
                 raise
 
             try:
@@ -285,6 +297,9 @@ async def scrape_website(headless=True, browser_type='firefox', debug_mode=False
 
                 print(f"Scraped {len(companies)} companies "
                       f"({sum(1 for c in companies if c['Ecosystem'])} with ecosystem)")
+                inconsistency_count = sum(1 for c in companies if c['Portfolio'] is None)
+                if inconsistency_count > 0:
+                    print(f"  ⚠ {inconsistency_count} companies tagged with ecosystem but no portfolio (included with Portfolio=None)")
                 return pd.DataFrame(companies)
 
             finally:

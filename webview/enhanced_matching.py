@@ -1,19 +1,17 @@
 import re
-from rapidfuzz import fuzz, process
+from rapidfuzz import fuzz
 import pandas as pd
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, Tuple, Optional
 
 class EnhancedCompanyMatcher:
-    def __init__(self, 
-                 fuzzy_threshold: int = 90,  # Increased from 85 to be more strict
+    def __init__(self,
+                 fuzzy_threshold: int = 90,
                  sector_threshold: int = 80,
-                 exact_match_threshold: int = 95,
-                 partial_match_threshold: int = 90):
-        
+                 exact_match_threshold: int = 95):
+
         self.fuzzy_threshold = fuzzy_threshold
         self.sector_threshold = sector_threshold
         self.exact_match_threshold = exact_match_threshold
-        self.partial_match_threshold = partial_match_threshold
         
         # Common business suffixes to normalize (order matters - most specific first)
         self.business_suffixes = [
@@ -216,26 +214,6 @@ class EnhancedCompanyMatcher:
         return {"match": score >= self.sector_threshold, "score": score,
                 "normalized_baseline": norm_baseline,
                 "normalized_website": norm_website}
-
-    def debug_match(self, baseline_name: str, website_name: str) -> None:
-        """Debug function to understand why two companies matched"""
-        print(f"\n=== DEBUGGING MATCH ===")
-        print(f"Baseline: '{baseline_name}'")
-        print(f"Website: '{website_name}'")
-        
-        norm_baseline = self.normalize_company_name(baseline_name)
-        norm_website = self.normalize_company_name(website_name)
-        print(f"Normalized Baseline: '{norm_baseline}'")
-        print(f"Normalized Website: '{norm_website}'")
-        
-        core_baseline = self.extract_core_name(baseline_name)
-        core_website = self.extract_core_name(website_name)
-        print(f"Core Baseline: '{core_baseline}'")
-        print(f"Core Website: '{core_website}'")
-        
-        match_result = self.calculate_match_score(baseline_name, website_name)
-        print(f"Match Result: {match_result}")
-        print("=========================\n")
 
     def find_best_match(self, baseline_row: pd.Series, website_df: pd.DataFrame) -> Tuple[Optional[pd.Series], Dict]:
         """Find the best match for a baseline company in website data"""

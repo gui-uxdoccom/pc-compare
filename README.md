@@ -1,115 +1,86 @@
-# 🏢 PC Compare - Portfolio Company Validation Tool
+# PC Compare — Portfolio Company Validation Tool
 
-A sophisticated web application for comparing portfolio companies between your baseline Excel files and live website data with 99%+ accuracy using advanced matching algorithms.
+A Flask web app that compares a quarterly portfolio baseline (Excel) against the live company list scraped from the [PIF portfolio page](https://www.pif.gov.sa/en/our-investments/our-portfolio/), and reports what to add, remove, or rename.
 
-## 🚀 **Quick Start**
+There is **one** application — a browser-based web UI. There is no separate CLI tool. (An older terminal script, `bkp-compare.py`, has been removed; see [.gitignore](.gitignore) for the historical reference.)
+
+## Quick Start
 
 ```bash
-# Navigate to the webview directory
-cd pc-compare/webview
-
-# Create virtual environment (recommended)
+cd webview
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate              # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Install Playwright browsers
-playwright install chromium firefox
-
-# Start the Flask application
+playwright install firefox chromium
 python3 app.py
 ```
 
-Visit `http://127.0.0.1:5000` to use the web interface.
+Open `http://127.0.0.1:5000` and upload a baseline `.xlsx` file with columns: `CR Name`, `Brand Name`, `VRP Sector`.
 
-## ✨ **Key Features**
+## How It Works
 
-### 🧠 **Advanced Matching Engine**
-- **99%+ Accuracy** with multi-strategy matching algorithms
-- **Smart normalization** handles business suffixes and name variations
-- **Acronym detection** matches "SABIC" with "Saudi Basic Industries Corporation SABIC"
-- **False positive prevention** avoids incorrect matches
+1. **Upload** — `POST /upload` accepts the Excel file plus scraping options (browser, headless, debug, timeout) and returns a `result_id`.
+2. **Background scrape** — Flask spawns a thread that runs [`compare.scrape_website()`](webview/compare.py), an async Playwright job that uses [`playwright-stealth`](https://github.com/AtuboDad/playwright_stealth) to bypass Cloudflare on the PIF site. Firefox is the default browser (best Cloudflare bypass rate).
+3. **Match** — [`enhanced_matching.enhanced_compare_companies()`](webview/enhanced_matching.py) runs the baseline rows against the scraped list using five strategies in order: exact normalized → core name → acronym/substring → token-based → fuzzy fallback. See thresholds in [webview/config.py](webview/config.py).
+4. **Persist & summarize** — [`results_analyzer.ResultsSummarizer`](webview/results_analyzer.py) writes a 3-sheet Excel report (Comparison Results, Unmatched Website Companies, Summary) and saves a row per run plus per-company history into `webview/comparison_history.db` (SQLite) for quarter-over-quarter trend analysis.
+5. **Poll & download** — Browser polls `GET /status/<result_id>`, then fetches `GET /summary/<result_id>` and `GET /download/<result_id>` when complete.
 
-### 📊 **Comprehensive Analytics**
-- **Real-time dashboard** with key metrics and insights
-- **Historical tracking** with quarter-over-quarter comparison
-- **Smart recommendations** for data quality improvements
-- **Executive-ready reports** with summary statistics
-
-### 🎯 **Intelligent Validation**
-- **Multi-field matching** (CR Name, Brand Name, Sector)
-- **Sector intelligence** with synonym mapping
-- **Confidence scoring** for each match
-- **Issue categorization** (Missing, Extra, Name/Sector Updates)
-
-## 📁 **Project Structure**
+## Project Layout
 
 ```
-webview/
-├── app.py                      # Flask web application
-├── enhanced_matching.py        # Advanced matching algorithms
-├── results_analyzer.py         # Analytics and historical tracking
-├── compare.py                  # Core comparison logic with scraping
-├── config.py                   # Configuration settings
-├── index.html                  # Web interface
-├── requirements.txt            # Python dependencies
-├── test_scrape_visible.py      # Debug scraper (Chrome)
-├── test_scrape_firefox.py      # Debug scraper (Firefox)
-├── uploads/                    # File upload directory
-└── README.md                   # Complete documentation
+pc-compare/
+├── webview/                       # The application (everything lives here)
+│   ├── app.py                     # Flask routes + background processing
+│   ├── compare.py                 # Playwright scraper (Cloudflare bypass)
+│   ├── enhanced_matching.py       # 5-strategy matcher
+│   ├── results_analyzer.py        # Summary + SQLite historical tracker
+│   ├── config.py                  # WEBSITE_URL, thresholds, CSS selectors
+│   ├── index.html                 # Single-page web UI
+│   ├── debug_selectors.py         # Dev tool: opens visible browser to verify selectors
+│   ├── requirements.txt
+│   ├── uploads/                   # Uploaded baselines + generated results + debug dumps
+│   └── comparison_history.db      # SQLite history (auto-created)
+├── README.md                      # This file
+├── SETUP.md                       # Short install walkthrough
+├── CLOUDFLARE_TROUBLESHOOTING.md  # Bypass strategies + escalation path
+├── requirements.txt               # Duplicate of webview/requirements.txt
+└── config.py                      # Unused duplicate of webview/config.py — safe to delete
 ```
 
-## 🔧 **How It Works**
+## Output
 
-1. **Upload** your quarterly baseline Excel file
-2. **Automatic scraping** of live website data using Playwright
-3. **Multi-strategy matching** using 5 different algorithms:
-   - Exact normalized matching
-   - Core name extraction
-   - Acronym/substring matching
-   - Token-based matching
-   - Fuzzy matching with validation
-4. **Analytics generation** with historical comparison
-5. **Download** enhanced Excel report with insights
+Results land in `webview/uploads/results_<YYYYMMDDHHMMSS>.xlsx`. Status values per row:
 
-## 📈 **Matching Accuracy**
+| Status | Meaning |
+|--------|---------|
+| `OK` | Name and sector both match |
+| `Add` | In baseline, missing from website |
+| `Remove` | On website, missing from baseline |
+| `Requires name update` | Matched but name differs |
+| `Requires sector update` | Matched but sector differs |
 
-- **99%+ overall accuracy** for portfolio company validation
-- **False positive prevention** with length and context validation
-- **Handles complex cases** like business name variations and acronyms
-- **Sector intelligence** with synonym mapping
+## Configuration
 
-## 🎯 **Perfect For**
+Edit [webview/config.py](webview/config.py):
 
-- **Portfolio Managers** validating company listings quarterly
-- **Investment Teams** maintaining accurate company databases  
-- **Compliance Teams** ensuring website data accuracy
-- **Data Analysts** tracking portfolio company changes over time
+- `WEBSITE_URL` — target portfolio page
+- `FUZZY_MATCH_THRESHOLD` (default 85), `SECTOR_MATCH_THRESHOLD` (default 80)
+- `SELECTORS` — CSS selectors for cookie banner, pagination, company cards. Update these if the PIF site changes its markup.
 
-## 📊 **Sample Results**
+## Cloudflare Troubleshooting
 
-For a typical 200-company baseline:
-- ✅ **190-198 Perfect Matches** (99%+ accuracy)
-- 🔄 **5-10 Name Updates** needed
-- 🏷️ **2-5 Sector Updates** needed  
-- ➕ **0-3 Missing Companies** to add to website
-- ➖ **0-2 Extra Companies** to review
+The scraper applies `playwright-stealth` automatically and detects Cloudflare challenge pages, waiting up to 30s (headless) or 120s (visible) for resolution. If scraping fails:
 
-## 🛠️ **Requirements**
+1. Switch to **Firefox** in the UI (already default).
+2. Switch to **Visible** mode and solve any CAPTCHA manually.
+3. Increase timeout to 120–180 s.
+4. Inspect `webview/uploads/error_screenshot_*.png` and `error_page_*.html` (debug mode is on by default).
+5. Run [webview/debug_selectors.py](webview/debug_selectors.py) to verify selectors haven't changed on the live page.
+
+Full escalation path (incl. switching to `camoufox` or a managed bypass proxy) is in [CLOUDFLARE_TROUBLESHOOTING.md](CLOUDFLARE_TROUBLESHOOTING.md).
+
+## Requirements
 
 - Python 3.8+
-- Modern web browser
-- Internet connection for website scraping
-
-See [webview/README.md](webview/README.md) for detailed technical documentation, including:
-- Complete installation instructions
-- Usage guide for web interface and CLI
-- Troubleshooting Cloudflare issues
-- Understanding matching strategies
-- Configuration options
-
----
-
-**Built with ❤️ for accurate portfolio company validation**
+- Playwright browsers (Firefox required, Chromium recommended)
+- Outbound HTTPS to `pif.gov.sa`

@@ -1,14 +1,9 @@
-import asyncio
 import os
 import pandas as pd
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
-from rapidfuzz import fuzz
-import sys
 from datetime import datetime
 from config import *
-from tqdm import tqdm
-import re
 
 
 async def scrape_website(headless=True, browser_type='firefox', debug_mode=False, timeout=60000):

@@ -241,6 +241,20 @@ class EnhancedCompanyMatcher:
         
         return best_match, best_score_info
 
+def _compare_field(matcher, baseline_value, website_value, exists: bool) -> tuple:
+    """Compare one categorical field. Returns (match_label, mismatch_flag).
+
+    match_label is one of "Yes" / "No" / "N/A". mismatch_flag is True only
+    when the field has both sides present and they don't match.
+    """
+    if not baseline_value or pd.isna(baseline_value):
+        return "N/A", False
+    if not exists:
+        return "N/A", False
+    cmp = matcher.compare_categorical(baseline_value, website_value)
+    return ("Yes" if cmp['match'] else "No"), not cmp['match']
+
+
 def _build_result_row(
     matcher: 'EnhancedCompanyMatcher',
     baseline_row: pd.Series,
@@ -264,15 +278,9 @@ def _build_result_row(
     if spec.portfolio_field is not None:
         baseline_portfolio = baseline_row.get(spec.portfolio_field, '')
         website_portfolio = best_match['Portfolio'] if exists else ''
-        if not baseline_portfolio:
-            portfolio_match = "N/A"
-        elif not exists:
-            portfolio_match = "N/A"
-        else:
-            cmp = matcher.compare_categorical(baseline_portfolio, website_portfolio)
-            portfolio_match = "Yes" if cmp['match'] else "No"
-            if not cmp['match']:
-                field_mismatch = True
+        portfolio_match, mismatch = _compare_field(matcher, baseline_portfolio, website_portfolio, exists)
+        if mismatch:
+            field_mismatch = True
         row["Portfolio"] = baseline_portfolio
         row["Website Portfolio"] = website_portfolio
         row["Portfolio Match"] = portfolio_match
@@ -280,15 +288,9 @@ def _build_result_row(
     if spec.ecosystem_field is not None:
         baseline_ecosystem = baseline_row.get(spec.ecosystem_field, '')
         website_ecosystem = (best_match['Ecosystem'] if exists else '') or ''
-        if not baseline_ecosystem or pd.isna(baseline_ecosystem):
-            ecosystem_match = "N/A"
-        elif not exists:
-            ecosystem_match = "N/A"
-        else:
-            cmp = matcher.compare_categorical(baseline_ecosystem, website_ecosystem)
-            ecosystem_match = "Yes" if cmp['match'] else "No"
-            if not cmp['match']:
-                field_mismatch = True
+        ecosystem_match, mismatch = _compare_field(matcher, baseline_ecosystem, website_ecosystem, exists)
+        if mismatch:
+            field_mismatch = True
         row["Ecosystem"] = baseline_ecosystem
         row["Website Ecosystem"] = website_ecosystem
         row["Ecosystem Match"] = ecosystem_match
@@ -344,6 +346,14 @@ def enhanced_compare_companies(
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Compare baseline against website using the supplied TemplateSpec."""
     matcher = EnhancedCompanyMatcher()
+    if template_spec.portfolio_field is not None:
+        assert 'Portfolio' in website_df.columns, (
+            "TemplateSpec declares portfolio_field but website_df is missing 'Portfolio' column"
+        )
+    if template_spec.ecosystem_field is not None:
+        assert 'Ecosystem' in website_df.columns, (
+            "TemplateSpec declares ecosystem_field but website_df is missing 'Ecosystem' column"
+        )
     results = []
     matched_website_companies = set()
 

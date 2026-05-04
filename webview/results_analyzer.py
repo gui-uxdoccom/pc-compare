@@ -1,11 +1,17 @@
+import os
 import pandas as pd
 import json
 from datetime import datetime
 from typing import Dict, List, Optional
 import sqlite3
 
+_DEFAULT_DB_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "comparison_history.db"
+)
+
+
 class HistoricalTracker:
-    def __init__(self, db_path: str = "comparison_history.db"):
+    def __init__(self, db_path: str = _DEFAULT_DB_PATH):
         self.db_path = db_path
         self.init_database()
     
@@ -120,7 +126,7 @@ class HistoricalTracker:
         return historical_data
 
 class ResultsSummarizer:
-    def __init__(self, db_path: str = "comparison_history.db"):
+    def __init__(self, db_path: str = _DEFAULT_DB_PATH):
         self.tracker = HistoricalTracker(db_path=db_path)
     
     def generate_summary(self, results_df: pd.DataFrame, baseline_file: str,

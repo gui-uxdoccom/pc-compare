@@ -6,6 +6,89 @@ from datetime import datetime
 from config import *
 
 
+async def _open_portfolio_page(playwright, headless, browser_type, timeout):
+    """Launch the browser, apply stealth, navigate, dismiss cookies, and wait for the company list.
+
+    Returns (browser, context, page) so the caller can drive interactions and tear down.
+    """
+    if browser_type == 'firefox':
+        browser = await playwright.firefox.launch(headless=headless)
+    elif browser_type == 'webkit':
+        browser = await playwright.webkit.launch(headless=headless)
+    else:
+        browser = await playwright.chromium.launch(
+            headless=headless,
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process',
+            ],
+        )
+
+    context = await browser.new_context(
+        viewport={'width': 1920, 'height': 1080},
+        user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        locale='en-US',
+        timezone_id='America/New_York',
+        color_scheme='light',
+        permissions=['geolocation'],
+        extra_http_headers={
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+            'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"macOS"',
+        },
+    )
+
+    page = await context.new_page()
+    await Stealth().apply_stealth_async(page)
+
+    await page.mouse.move(100, 100)
+    await page.wait_for_timeout(500)
+
+    try:
+        await page.goto(WEBSITE_URL, wait_until='domcontentloaded', timeout=timeout)
+        await page.wait_for_timeout(5000)
+    except Exception:
+        await page.goto(WEBSITE_URL, wait_until='load', timeout=timeout)
+        await page.wait_for_timeout(5000)
+
+    content = await page.content()
+    if 'cloudflare' in content.lower() and ('challenge' in content.lower() or 'checking' in content.lower()):
+        print("⚠ CLOUDFLARE CHALLENGE DETECTED — waiting 30s...")
+        await page.wait_for_timeout(30000)
+        if not headless:
+            content = await page.content()
+            if 'cloudflare' in content.lower() and 'challenge' in content.lower():
+                print("   Solve manually in browser; waiting 120s...")
+                await page.wait_for_timeout(120000)
+
+    try:
+        await page.wait_for_selector(SELECTORS["cookie_accept"], timeout=5000)
+        await page.click(SELECTORS["cookie_accept"])
+        await page.wait_for_timeout(3000)
+    except Exception:
+        pass
+
+    await page.wait_for_selector('div.search-results', state='visible', timeout=30000)
+    await page.wait_for_selector('ul.search-result-list', state='visible', timeout=30000)
+    await page.wait_for_timeout(3000)
+
+    return browser, context, page
+
+
 async def scrape_website(headless=True, browser_type='firefox', debug_mode=False, timeout=60000):
     """Scrape company data from website with Cloudflare bypass via playwright-stealth.
 

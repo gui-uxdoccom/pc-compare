@@ -9,11 +9,12 @@ SELECTORS = {
     "pagination": "ul.page-selector-list li a.page-selector-item-link",
     "company_card": ".search-result-list li a",
     "company_name": "h4.investmentTitle.field-title",
-    # Facet panels are identified via Playwright's :has-text() pseudo applied
-    # to the surrounding component-content block (panels themselves don't carry
-    # a discriminating attribute — both have class "facet-search-filter").
-    "portfolio_facet_panel": "div.component-content:has-text('Investment Portfolios') div.facet-search-filter",
-    "ecosystem_facet_panel": "div.component-content:has-text('Ecosystems') div.facet-search-filter",
+    # Both panels carry class "facet-search-filter" with no discriminating
+    # attribute. We tell them apart by the contents of their facet items:
+    # portfolio data-facetvalues all contain "Portfolio" (e.g. "Vision Portfolio");
+    # ecosystem values never do.
+    "portfolio_facet_panel": "div.facet-search-filter:has(p[data-facetvalue*='Portfolio'])",
+    "ecosystem_facet_panel": "div.facet-search-filter:not(:has(p[data-facetvalue*='Portfolio']))",
     "facet_item": "p.facet-value",
     "facet_value_attr": "data-facetvalue",
     "facet_checkbox": "input[type='checkbox']",

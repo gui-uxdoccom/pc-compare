@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show *)",
+      "Read(//private/tmp/**)",
+      "Bash(curl -s \"https://pypi.org/pypi/playwright/1.60.0/json\")"
+    ]
+  }
+}
